@@ -1,24 +1,19 @@
 terraform {
-	required_version = ">= 1.0.0"
+  required_version = ">= 1.0.0"
 
-	required_providers {
-		oci = {
-			source  = "hashicorp/oci"
-			version = "7.29.0"
-		}
-	}
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "7.29.0"
+    }
+  }
 }
 
-# Provider configuration example for OCI (adjust variables or use env/config file)
+# Provider configuration for OCI using config file profile DEFAULT
+# Profile DEFAULT uses sa-bogota-1 region
 provider "oci" {
-	tenancy_ocid     = var.tenancy_ocid
-	user_ocid        = var.user_ocid
-	fingerprint      = var.fingerprint
-	private_key_path = var.private_key_path
-	region           = var.region
-
-	# If you prefer using a shared CLI config file/profile, uncomment:
-	# config_file_profile = var.config_file_profile
+  config_file_profile = "DEFAULT"
+  region              = "sa-bogota-1"
 }
 
 
