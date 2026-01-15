@@ -1,0 +1,9 @@
+.terraform/
+tf.plan
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.tfstate*
+.vscode/
+*.log
+.idea/
+*.tfvars
