@@ -1,13 +1,4 @@
 # ==============================================================================
-# PROVIDER VARIABLES
-# ==============================================================================
-
-variable "region" {
-  description = "OCI region (e.g. sa-bogota-1)"
-  type        = string
-}
-
-# ==============================================================================
 # COMPARTMENT VARIABLES
 # ==============================================================================
 
@@ -87,13 +78,13 @@ variable "internet_gateway_display_name" {
 variable "instance_shape" {
   description = "Shape para las instancias web (Always Free tier)"
   type        = string
-  default     = "VM.Standard.E2.1.Micro"
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "bastion_shape" {
   description = "Shape para la instancia bastion (Always Free tier)"
   type        = string
-  default     = "VM.Standard.E2.1.Micro"
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "instance_ocpus" {

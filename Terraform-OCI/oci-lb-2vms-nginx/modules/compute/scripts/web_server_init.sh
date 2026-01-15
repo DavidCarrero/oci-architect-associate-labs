@@ -1,23 +1,26 @@
 #!/bin/bash
 # ==============================================================================
-# WEB SERVER INITIALIZATION SCRIPT
+# WEB SERVER INITIALIZATION SCRIPT - FIXED VERSION
 # ==============================================================================
-# Este script se ejecuta automáticamente al crear la instancia
-# Instala y configura un servidor web simple que muestra información de la instancia
-
+# Este script instala nginx y configura el firewall de manera robusta
 # Registrar todas las acciones en un log
 exec > >(tee -a /var/log/user-data.log)
 exec 2>&1
 
 echo "=========================================="
 echo "Iniciando configuración del Web Server ${server_number}"
+echo "Fecha: $(date)"
 echo "=========================================="
 
-# Actualizar el sistema (DESHABILITADO para acelerar deployment)
-# echo "Actualizando paquetes del sistema..."
-# yum update -y
+# ==============================================================================
+# PASO 1: DESHABILITAR SELINUX TEMPORALMENTE (para evitar problemas)
+# ==============================================================================
+echo "Configurando SELinux..."
+setenforce 0 2>/dev/null || true
 
-# Instalar nginx
+# ==============================================================================
+# PASO 2: INSTALAR NGINX
+# ==============================================================================
 echo "Instalando nginx..."
 yum install -y nginx
 
@@ -27,7 +30,9 @@ INSTANCE_NAME=$(hostname)
 PRIVATE_IP=$(hostname -I | awk '{print $1}')
 AVAILABILITY_DOMAIN=$(curl -s http://169.254.169.254/opc/v1/instance/availabilityDomain)
 
-# Crear página HTML personalizada
+# ==============================================================================
+# PASO 3: CREAR PÁGINA HTML PERSONALIZADA
+# ==============================================================================
 echo "Creando página web personalizada..."
 cat > /usr/share/nginx/html/index.html <<EOF
 <!DOCTYPE html>
@@ -136,7 +141,9 @@ cat > /usr/share/nginx/html/index.html <<EOF
 </html>
 EOF
 
-# Configurar nginx para escuchar en puerto 80
+# ==============================================================================
+# PASO 4: CONFIGURAR NGINX
+# ==============================================================================
 echo "Configurando nginx..."
 cat > /etc/nginx/nginx.conf <<'NGINXCONF'
 user nginx;
@@ -185,76 +192,109 @@ http {
 }
 NGINXCONF
 
-# Habilitar y iniciar nginx
-echo "Iniciando nginx..."
-systemctl enable nginx
-systemctl start nginx
-
-# Configurar firewall - MEJORADO para garantizar ejecución
+# ==============================================================================
+# PASO 5: CONFIGURAR FIREWALL - MÉTODO ROBUSTO
+# ==============================================================================
 echo "=========================================="
 echo "Configurando firewall..."
 echo "=========================================="
 
-# Asegurar que firewalld esté instalado y en ejecución
-echo "Verificando firewalld..."
-if ! systemctl is-active --quiet firewalld; then
-    echo "Firewalld no está activo, iniciando servicio..."
-    systemctl start firewalld
-    systemctl enable firewalld
-fi
+# OPCIÓN 1: Deshabilitar firewalld completamente (más confiable para testing)
+echo "Deshabilitando firewalld..."
+systemctl stop firewalld 2>/dev/null || true
+systemctl disable firewalld 2>/dev/null || true
 
-# Esperar a que firewalld esté completamente listo (máximo 30 segundos)
-echo "Esperando a que firewalld esté listo..."
-for i in {1..30}; do
-    if systemctl is-active --quiet firewalld; then
-        echo "Firewalld está activo después de $i segundos"
-        break
-    fi
-    sleep 1
-done
+# OPCIÓN 2: Usar iptables directo (más confiable)
+echo "Configurando iptables..."
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+iptables -I INPUT -p tcp --dport 443 -j ACCEPT
 
-# Verificar si firewalld está corriendo
-if systemctl is-active --quiet firewalld; then
-    echo "Agregando regla HTTP al firewall..."
-    firewall-cmd --permanent --add-service=http
-    
-    echo "Recargando firewall..."
-    firewall-cmd --reload
-    
-    # Verificar que la regla se aplicó correctamente
-    echo "Verificando reglas del firewall..."
-    firewall-cmd --list-services
-    
-    if firewall-cmd --list-services | grep -q http; then
-        echo "✅ Regla HTTP agregada exitosamente al firewall"
-    else
-        echo "⚠️ ADVERTENCIA: La regla HTTP no aparece en la lista"
-    fi
-else
-    echo "⚠️ ADVERTENCIA: Firewalld no está activo, intentando alternativa con iptables..."
-    # Alternativa: usar iptables directo
-    iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-    iptables -I INPUT -p tcp --dport 443 -j ACCEPT
-    service iptables save 2>/dev/null || true
-    echo "Reglas iptables aplicadas como alternativa"
-fi
+# Guardar reglas de iptables
+iptables-save > /etc/sysconfig/iptables 2>/dev/null || true
 
-# Verificar que nginx está escuchando en puerto 80
+echo "✅ Firewall configurado - puerto 80 y 443 abiertos"
+
+# ==============================================================================
+# PASO 6: HABILITAR E INICIAR NGINX
+# ==============================================================================
+echo "Habilitando y iniciando nginx..."
+systemctl enable nginx
+systemctl start nginx
+
+# Esperar a que nginx esté completamente iniciado
+sleep 3
+
+# ==============================================================================
+# PASO 7: VERIFICACIONES
+# ==============================================================================
 echo "=========================================="
-echo "Verificando nginx..."
+echo "Verificando configuración..."
 echo "=========================================="
-netstat -tlnp | grep :80 || ss -tlnp | grep :80
-systemctl status nginx --no-pager -l
 
-# Prueba local
-echo "Realizando prueba HTTP local..."
+# Verificar nginx
+echo "Estado de nginx:"
+systemctl status nginx --no-pager -l || true
+
+# Verificar puerto 80
+echo "Puerto 80:"
+netstat -tlnp | grep :80 || ss -tlnp | grep :80 || true
+
+# Prueba HTTP local
+echo "Probando HTTP local..."
 sleep 2
-curl -I http://localhost || echo "⚠️ Curl falló, pero nginx podría estar iniciando aún"
+curl -I http://localhost 2>/dev/null || echo "⚠️ Curl falló, pero nginx podría estar iniciando"
 
+# Verificar firewall
+echo "Estado del firewall:"
+systemctl is-active firewalld && echo "Firewalld: ACTIVO" || echo "Firewalld: DESACTIVADO"
+
+# Verificar reglas iptables
+echo "Reglas iptables:"
+iptables -L INPUT -n | grep -E "tcp dpt:(80|443)" || true
+
+# ==============================================================================
+# PASO 8: CONFIGURAR CREDENCIALES DE ACCESO
+# ==============================================================================
 echo "=========================================="
-echo "✅ Web Server ${server_number} configurado exitosamente"
+echo "Configurando credenciales de acceso..."
 echo "=========================================="
-echo "Logs disponibles en: /var/log/user-data.log"
-echo "Estado del firewall: $(systemctl is-active firewalld)"
-echo "Estado de nginx: $(systemctl is-active nginx)"
+
+# Establecer contraseña para usuario opc (admin/admin)
+echo "Estableciendo contraseña para usuario 'opc'..."
+echo "opc:admin" | chpasswd
+if [ $? -eq 0 ]; then
+    echo "✅ Contraseña establecida para usuario 'opc': admin"
+else
+    echo "⚠️ Error al establecer contraseña para opc"
+fi
+
+# Habilitar autenticación por contraseña en SSH (opcional, comentar si no se necesita)
+echo "Habilitando autenticación por contraseña en SSH..."
+sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+
+# Asegurar que PasswordAuthentication esté configurado
+if ! grep -q "^PasswordAuthentication yes" /etc/ssh/sshd_config; then
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+fi
+
+# Reiniciar SSH para aplicar cambios
+systemctl restart sshd
+echo "✅ SSH configurado para aceptar contraseñas"
+
+# ==============================================================================
+# PASO 9: RESULTADO FINAL
+# ==============================================================================
+echo "=========================================="
+echo "✅ Web Server ${server_number} configurado"
+echo "=========================================="
+echo "Logs: /var/log/user-data.log"
+echo "Nginx: $(systemctl is-active nginx)"
+echo "Puerto 80: $(netstat -tln | grep -c ':80' || echo '0') listener(s)"
+echo ""
+echo "🔐 CREDENCIALES DE ACCESO:"
+echo "   Usuario: opc"
+echo "   Contraseña: admin"
+echo ""
+echo "Fecha completado: $(date)"
 echo "=========================================="

@@ -19,16 +19,24 @@ resource "oci_core_instance" "web_servers" {
   shape               = var.instance_shape
 
   # Configuración de recursos para Flexible Shape
-  shape_config {
-    ocpus         = var.instance_ocpus
-    memory_in_gbs = var.instance_memory_in_gbs
+  # Solo aplicar si el shape contiene "Flex"
+  dynamic "shape_config" {
+    for_each = length(regexall("Flex", var.instance_shape)) > 0 ? [1] : []
+    content {
+      ocpus         = var.instance_ocpus
+      memory_in_gbs = var.instance_memory_in_gbs
+    }
   }
 
   # Configuración Preemptible para reducir costos
-  preemptible_instance_config {
-    preemption_action {
-      type = "TERMINATE"
-      preserve_boot_volume = false
+  # Solo aplicar si el shape contiene "Flex"
+  dynamic "preemptible_instance_config" {
+    for_each = length(regexall("Flex", var.instance_shape)) > 0 ? [1] : []
+    content {
+      preemption_action {
+        type = "TERMINATE"
+        preserve_boot_volume = false
+      }
     }
   }
 
@@ -65,14 +73,27 @@ resource "oci_core_instance" "web_servers" {
   }
 
   # ------------------------------------------------------------------------------
-  # Oracle Cloud Agent - Habilitar plugin de Bastion
+  # Oracle Cloud Agent - Habilitar plugins necesarios
   # ------------------------------------------------------------------------------
   agent_config {
     is_management_disabled = false
     is_monitoring_disabled = false
     
+    # Plugin de Bastion (para sesiones SSH)
     plugins_config {
       name          = "Bastion"
+      desired_state = "ENABLED"
+    }
+    
+    # Plugin de Management Agent (para Run Command)
+    plugins_config {
+      name          = "Management Agent"
+      desired_state = "ENABLED"
+    }
+    
+    # Plugin de OS Management Service Agent (para Run Command)
+    plugins_config {
+      name          = "OS Management Service Agent"
       desired_state = "ENABLED"
     }
   }

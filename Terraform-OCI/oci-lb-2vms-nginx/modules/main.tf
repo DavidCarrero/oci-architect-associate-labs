@@ -24,6 +24,11 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_id
 }
 
+# Obtener la región actual
+data "oci_identity_region_subscriptions" "current" {
+  tenancy_id = var.compartment_id
+}
+
 # Obtener la imagen de Oracle Linux 8 más reciente compatible con el shape
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_id
@@ -38,8 +43,23 @@ data "oci_core_images" "oracle_linux" {
 # LOCALS - Validaciones y valores calculados
 # ------------------------------------------------------------------------------
 locals {
-  availability_domain = try(data.oci_identity_availability_domains.ads.availability_domains[0].name, null)
-  image_id             = try(data.oci_core_images.oracle_linux.images[0].id, null)
+  # Obtener el primer availability domain disponible
+  availability_domains_list = data.oci_identity_availability_domains.ads.availability_domains
+  availability_domain       = length(local.availability_domains_list) > 0 ? local.availability_domains_list[0].name : ""
+  
+  # Obtener la primera imagen de Oracle Linux disponible
+  images_list = data.oci_core_images.oracle_linux.images
+  image_id    = length(local.images_list) > 0 ? local.images_list[0].id : ""
+}
+
+# Validación: Verificar que se encontró al menos un AD
+resource "null_resource" "validate_availability_domain" {
+  count = local.availability_domain == "" ? 1 : 0
+  
+  provisioner "local-exec" {
+    command     = "echo 'ERROR: No se encontraron Availability Domains en el compartment especificado' && exit 1"
+    interpreter = ["PowerShell", "-Command"]
+  }
 }
 
 # ------------------------------------------------------------------------------
@@ -100,6 +120,9 @@ module "compute" {
 # ------------------------------------------------------------------------------
 module "bastion" {
   source = "./bastion"
+  
+  # Esperar a que las instancias estén completamente creadas
+  depends_on = [module.compute]
 
   # Identificadores
   compartment_id = var.compartment_id
@@ -109,6 +132,14 @@ module "bastion" {
 
   # Lista de IPs permitidas (cambiar a tu IP para mayor seguridad)
   allowed_cidr_blocks = ["0.0.0.0/0"]
+
+  # SSH public key para las sesiones
+  ssh_public_key = var.ssh_public_key
+
+  # Web servers para crear sesiones automáticas
+  web_server_ids         = module.compute.web_server_ids
+  web_server_private_ips = module.compute.web_server_private_ips
+  web_server_instances   = module.compute.web_server_instances  # Para depends_on
 }
 
 # ------------------------------------------------------------------------------

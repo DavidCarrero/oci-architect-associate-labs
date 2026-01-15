@@ -68,6 +68,26 @@ output "web_server_ids" {
   value       = module.compute.web_server_ids
 }
 
+output "web_server_state" {
+  description = "Estado de las instancias Web Servers"
+  value       = module.compute.web_server_state
+}
+
+output "web_server_time_created" {
+  description = "Tiempo de creación de las instancias"
+  value       = module.compute.web_server_time_created
+}
+
+output "web_server_agent_bastion_status" {
+  description = "Estado del plugin Bastion en las instancias"
+  value       = module.compute.web_server_agent_bastion_status
+}
+
+output "web_server_init_validation" {
+  description = "Información para validar la instalación de nginx"
+  value       = module.compute.web_server_init_validation
+}
+
 # ------------------------------------------------------------------------------
 # BASTION SERVICE OUTPUTS
 # ------------------------------------------------------------------------------
@@ -88,6 +108,34 @@ output "bastion_connection_instructions" {
 }
 
 # ------------------------------------------------------------------------------
+# BASTION SESSIONS - SSH COMMANDS
+# ------------------------------------------------------------------------------
+
+output "web_server_1_session_id" {
+  description = "Session ID para Web Server 1"
+  value       = module.bastion.web_server_1_session_id
+}
+
+output "web_server_2_session_id" {
+  description = "Session ID para Web Server 2"
+  value       = module.bastion.web_server_2_session_id
+}
+
+output "web_server_1_ssh_command" {
+  description = "Comando SSH para conectarse al Web Server 1"
+  value       = <<-EOT
+    ssh -i C:\Users\practicante_dtic2\.ssh\id_ed25519_utb -o ProxyCommand="ssh -i C:\Users\practicante_dtic2\.ssh\id_ed25519_utb -W %h:%p -p 22 ${module.bastion.web_server_1_session_id}@host.bastion.${data.oci_identity_region_subscriptions.current.region_subscriptions[0].region_name}.oci.oraclecloud.com" opc@${module.compute.web_server_private_ips[0]}
+  EOT
+}
+
+output "web_server_2_ssh_command" {
+  description = "Comando SSH para conectarse al Web Server 2"
+  value       = <<-EOT
+    ssh -i C:\Users\practicante_dtic2\.ssh\id_ed25519_utb -o ProxyCommand="ssh -i C:\Users\practicante_dtic2\.ssh\id_ed25519_utb -W %h:%p -p 22 ${module.bastion.web_server_2_session_id}@host.bastion.${data.oci_identity_region_subscriptions.current.region_subscriptions[0].region_name}.oci.oraclecloud.com" opc@${module.compute.web_server_private_ips[1]}
+  EOT
+}
+
+# ------------------------------------------------------------------------------
 # INSTRUCCIONES DE ACCESO
 # ------------------------------------------------------------------------------
 
@@ -96,26 +144,29 @@ output "access_instructions" {
   value       = <<-EOT
     
     ═══════════════════════════════════════════════════════════════
-    INSTRUCCIONES DE ACCESO
+    ✅ INFRAESTRUCTURA DESPLEGADA - LISTO PARA USAR
     ═══════════════════════════════════════════════════════════════
     
-    1. ACCEDER A LA APLICACIÓN WEB:
-       URL: http://${module.load_balancer.load_balancer_ip_addresses[0]}
+    🌐 ACCEDER A LA APLICACIÓN WEB:
+       ${module.load_balancer.load_balancer_ip_addresses[0]}
        
-       El Load Balancer distribuye peticiones entre 2 web servers
-       usando política Round Robin.
+       Refresca varias veces para ver Round Robin entre Server #1 y #2
     
-    2. CONECTAR A INSTANCIAS WEB (via Bastion Service):
-       - Ir a OCI Console: Identity & Security > Bastion
-       - Seleccionar Bastion: ${module.bastion.bastion_name}
-       - Click "Create session"
-       - Seleccionar instancia target (web-server-1 o web-server-2)
-       - Copiar y ejecutar comando SSH generado
+    🔐 CONECTAR VIA SSH (SESIONES YA CREADAS):
     
-    3. USAR "RUN COMMAND" EN OCI CONSOLE:
-       - Compute > Instances > [web-server-1 o web-server-2]
-       - Oracle Cloud Agent > Run Command
-       - Pegar comandos para instalar nginx (ver abajo)
+       📌 Web Server 1:
+          terraform output -raw web_server_1_ssh_command | sh
+       
+       📌 Web Server 2:
+          terraform output -raw web_server_2_ssh_command | sh
+    
+    ⚙️ VERIFICAR NGINX EN SERVIDORES:
+       sudo systemctl status nginx
+       curl http://localhost
+    
+    🔥 CONFIGURAR FIREWALL (si backends en CRITICAL):
+       sudo firewall-cmd --permanent --add-service=http
+       sudo firewall-cmd --reload
     
     ═══════════════════════════════════════════════════════════════
     

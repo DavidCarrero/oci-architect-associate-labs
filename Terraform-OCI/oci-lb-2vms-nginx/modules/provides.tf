@@ -6,14 +6,17 @@ terraform {
       source  = "oracle/oci"
       version = "7.29.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
 }
 
-# Provider configuration for OCI using config file profile DEFAULT
-# Profile DEFAULT uses sa-bogota-1 region
+# Provider configuration for OCI using config file profile
+# Uses the DEFAULT profile from ~/.oci/config
 provider "oci" {
   config_file_profile = "DEFAULT"
-  region              = "sa-bogota-1"
 }
 
 

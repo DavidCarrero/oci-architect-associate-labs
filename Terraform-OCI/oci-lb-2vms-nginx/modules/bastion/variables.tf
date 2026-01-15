@@ -17,3 +17,24 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"] # Cambiar a tu IP pública para mayor seguridad
 }
+
+variable "ssh_public_key" {
+  description = "SSH public key para las sesiones Bastion"
+  type        = string
+}
+
+variable "web_server_ids" {
+  description = "Lista de OCIDs de los web servers"
+  type        = list(string)
+}
+
+variable "web_server_private_ips" {
+  description = "Lista de IPs privadas de los web servers"
+  type        = list(string)
+}
+
+variable "web_server_instances" {
+  description = "Lista de objetos completos de las instancias web servers (para depends_on)"
+  type        = any
+  default     = []
+}
